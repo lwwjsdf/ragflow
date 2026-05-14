@@ -41,11 +41,30 @@ import logging
 from quart import Blueprint, jsonify, request
 
 from api.apps import login_required
-from api.apps.restful_apis import chat_api, file_api, file2document_api, chunk_api, openai_api, document_api
+from api.apps.restful_apis import file_api, file2document_api, chunk_api, document_api
 from api.apps.restful_apis.system_api import run_health_checks
-from api.apps.restful_apis import agent_api
 from api.apps.services import file_api_service
 from api.utils.api_utils import get_data_error_result, get_json_result, add_tenant_id_to_kwargs
+
+# Conditionally import APIs that may be disabled in kb-only mode
+chat_api = None
+openai_api = None
+agent_api = None
+try:
+    from api.apps.restful_apis import chat_api as _chat_api
+    chat_api = _chat_api
+except Exception:
+    pass
+try:
+    from api.apps.restful_apis import openai_api as _openai_api
+    openai_api = _openai_api
+except Exception:
+    pass
+try:
+    from api.apps.restful_apis import agent_api as _agent_api
+    agent_api = _agent_api
+except Exception:
+    pass
 
 manager = Blueprint("backward_compat", __name__)
 legacy_v1_manager = Blueprint("backward_compat_legacy_v1", __name__)
@@ -74,62 +93,64 @@ async def deprecated_system_healthz():
 # Chat Completion APIs
 # =============================================================================
 
-@manager.route("/chats/<chat_id>/completions", methods=["POST"])
-@login_required
-async def deprecated_chat_completions(chat_id):
-    """
-    Deprecated: Use POST /api/v1/chat/completions instead.
+if chat_api is not None:
+    @manager.route("/chats/<chat_id>/completions", methods=["POST"])
+    @login_required
+    async def deprecated_chat_completions(chat_id):
+        """
+        Deprecated: Use POST /api/v1/chat/completions instead.
 
-    Old path: POST /api/v1/chats/{chat_id}/completions
-    New path: POST /api/v1/chat/completions
-    """
-    logging.warning(
-        "API endpoint /api/v1/chats/%s/completions is deprecated. "
-        "Please use /api/v1/chat/completions instead.",
-        chat_id,
-    )
-    # Forward to the new API implementation
-    return await chat_api.session_completion(chat_id)
+        Old path: POST /api/v1/chats/{chat_id}/completions
+        New path: POST /api/v1/chat/completions
+        """
+        logging.warning(
+            "API endpoint /api/v1/chats/%s/completions is deprecated. "
+            "Please use /api/v1/chat/completions instead.",
+            chat_id,
+        )
+        # Forward to the new API implementation
+        return await chat_api.session_completion(chat_id)
 
+if openai_api is not None:
+    @manager.route("/chats_openai/<chat_id>/chat/completions", methods=["POST"])
+    @login_required
+    async def deprecated_openai_chat_completions(chat_id):
+        """
+        Deprecated: Use POST /api/v1/openai/{chat_id}/chat/completions instead.
 
-@manager.route("/chats_openai/<chat_id>/chat/completions", methods=["POST"])
-@login_required
-async def deprecated_openai_chat_completions(chat_id):
-    """
-    Deprecated: Use POST /api/v1/openai/{chat_id}/chat/completions instead.
-
-    Old path: POST /api/v1/chats_openai/{chat_id}/chat/completions
-    New path: POST /api/v1/openai/{chat_id}/chat/completions
-    """
-    logging.warning(
-        "API endpoint /api/v1/chats_openai/%s/chat/completions is deprecated. "
-        "Please use /api/v1/openai/%s/chat/completions instead.",
-        chat_id, chat_id,
-    )
-    # Forward to the new API implementation
-    return await openai_api.openai_chat_completions(chat_id)
+        Old path: POST /api/v1/chats_openai/{chat_id}/chat/completions
+        New path: POST /api/v1/openai/{chat_id}/chat/completions
+        """
+        logging.warning(
+            "API endpoint /api/v1/chats_openai/%s/chat/completions is deprecated. "
+            "Please use /api/v1/openai/%s/chat/completions instead.",
+            chat_id, chat_id,
+        )
+        # Forward to the new API implementation
+        return await openai_api.openai_chat_completions(chat_id)
 
 
 # =============================================================================
 # Chat Session APIs
 # =============================================================================
 
-@manager.route("/chats/<chat_id>/sessions/<session_id>", methods=["PUT"])
-@login_required
-async def deprecated_update_session(chat_id, session_id):
-    """
-    Deprecated: Use PATCH /api/v1/chats/{chat_id}/sessions/{session_id} instead.
+if chat_api is not None:
+    @manager.route("/chats/<chat_id>/sessions/<session_id>", methods=["PUT"])
+    @login_required
+    async def deprecated_update_session(chat_id, session_id):
+        """
+        Deprecated: Use PATCH /api/v1/chats/{chat_id}/sessions/{session_id} instead.
 
-    Old path: PUT /api/v1/chats/{chat_id}/sessions/{session_id}
-    New path: PATCH /api/v1/chats/{chat_id}/sessions/{session_id}
-    """
-    logging.warning(
-        "API endpoint PUT /api/v1/chats/%s/sessions/%s is deprecated. "
-        "Please use PATCH /api/v1/chats/%s/sessions/%s instead.",
-        chat_id, session_id, chat_id, session_id,
-    )
-    # Forward to the new API implementation
-    return await chat_api.update_session(chat_id, session_id)
+        Old path: PUT /api/v1/chats/{chat_id}/sessions/{session_id}
+        New path: PATCH /api/v1/chats/{chat_id}/sessions/{session_id}
+        """
+        logging.warning(
+            "API endpoint PUT /api/v1/chats/%s/sessions/%s is deprecated. "
+            "Please use PATCH /api/v1/chats/%s/sessions/%s instead.",
+            chat_id, session_id, chat_id, session_id,
+        )
+        # Forward to the new API implementation
+        return await chat_api.update_session(chat_id, session_id)
 
 
 # =============================================================================
@@ -356,21 +377,22 @@ async def deprecated_file_rm(tenant_id=None):
 # Related Questions API
 # =============================================================================
 
-@manager.route("/sessions/related_questions", methods=["POST"])
-@login_required
-async def deprecated_related_questions():
-    """
-    Deprecated: Use POST /api/v1/chat/recommendation instead.
+if chat_api is not None:
+    @manager.route("/sessions/related_questions", methods=["POST"])
+    @login_required
+    async def deprecated_related_questions():
+        """
+        Deprecated: Use POST /api/v1/chat/recommendation instead.
 
-    Old path: POST /api/v1/sessions/related_questions
-    New path: POST /api/v1/chat/recommendation
-    """
-    logging.warning(
-        "API endpoint /api/v1/sessions/related_questions is deprecated. "
-        "Please use /api/v1/chat/recommendation instead."
-    )
-    # Forward to the new API implementation
-    return await chat_api.recommendation()
+        Old path: POST /api/v1/sessions/related_questions
+        New path: POST /api/v1/chat/recommendation
+        """
+        logging.warning(
+            "API endpoint /api/v1/sessions/related_questions is deprecated. "
+            "Please use /api/v1/chat/recommendation instead."
+        )
+        # Forward to the new API implementation
+        return await chat_api.recommendation()
 
 
 # =============================================================================
@@ -496,22 +518,23 @@ async def document_download_v1(attachment_id):
 # Agent Chat API
 # =============================================================================
 
-@manager.route("/agents/<agent_id>/completions", methods=["POST"])
-@login_required
-@add_tenant_id_to_kwargs
-async def deprecated_agent_completions(agent_id, tenant_id=None):
-    """
-    Deprecated: Use POST /api/v1/agents/chat/completions instead.
+if agent_api is not None:
+    @manager.route("/agents/<agent_id>/completions", methods=["POST"])
+    @login_required
+    @add_tenant_id_to_kwargs
+    async def deprecated_agent_completions(agent_id, tenant_id=None):
+        """
+        Deprecated: Use POST /api/v1/agents/chat/completions instead.
 
-    Old path: POST /api/v1/agents/{agent_id}/completions
-    New path: POST /api/v1/agents/chat/completions
-    """
-    logging.warning(
-        "API endpoint /api/v1/agents/%s/completions is deprecated. "
-        "Please use /api/v1/agents/chat/completions instead.",
-        agent_id,
-    )
-    return await agent_api.agent_chat_completion(tenant_id=tenant_id, agent_id=agent_id)
+        Old path: POST /api/v1/agents/{agent_id}/completions
+        New path: POST /api/v1/agents/chat/completions
+        """
+        logging.warning(
+            "API endpoint /api/v1/agents/%s/completions is deprecated. "
+            "Please use /api/v1/agents/chat/completions instead.",
+            agent_id,
+        )
+        return await agent_api.agent_chat_completion(tenant_id=tenant_id, agent_id=agent_id)
 
 def register_backward_compat_routes(app_instance):
     """

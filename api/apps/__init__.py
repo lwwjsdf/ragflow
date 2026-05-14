@@ -40,6 +40,15 @@ settings.init_settings()
 
 __all__ = ["app"]
 
+DISABLED_APIS = {
+    'chat_api',
+    'agent_api',
+    'memory_api',
+    'openai_api',
+    'mcp_api',
+    'plugin_api',
+}
+
 UNAUTHORIZED_MESSAGE = "<Unauthorized '401: Unauthorized'>"
 
 
@@ -286,9 +295,12 @@ def logout_user():
 
 def search_pages_path(page_path):
     app_path_list = [path for path in page_path.glob("*_app.py") if not path.name.startswith(".")]
+    app_path_list = [path for path in app_path_list if path.stem not in DISABLED_APIS]
     api_path_list = [path for path in page_path.glob("*sdk/*.py") if not path.name.startswith(".")]
+    api_path_list = [path for path in api_path_list if path.stem not in DISABLED_APIS]
     app_path_list.extend(api_path_list)
     restful_api_path_list = [path for path in page_path.glob("*restful_apis/*.py") if not path.name.startswith(".")]
+    restful_api_path_list = [path for path in restful_api_path_list if path.stem not in DISABLED_APIS]
     app_path_list.extend(restful_api_path_list)
     return app_path_list
 
