@@ -19,24 +19,9 @@ const PathMap = {
 
 const menuItems = [
   { path: Routes.Root, name: 'header.Root', icon: LucideHouse },
-  { path: Routes.Datasets, name: 'header.dataset' /* icon: Library, */ },
-  {
-    path: Routes.Chats,
-    name: 'header.chat',
-    /* icon: MessageSquareText, */ 'data-testid': 'nav-chat',
-  },
-  {
-    path: Routes.Searches,
-    name: 'header.search',
-    /* icon: Search, */ 'data-testid': 'nav-search',
-  },
-  {
-    path: Routes.Agents,
-    name: 'header.flow',
-    /* icon: Cpu, */ 'data-testid': 'nav-agent',
-  },
-  { path: Routes.Memories, name: 'header.memories' /* icon: Cpu, */ },
-  { path: Routes.Files, name: 'header.fileManager' /* icon: File, */ },
+  { path: Routes.Datasets, name: 'header.dataset' },
+  { path: Routes.Searches, name: 'header.search', 'data-testid': 'nav-search' },
+  { path: Routes.Files, name: 'header.fileManager' },
 ];
 
 const GlobalNavbar = supportsCssAnchor
