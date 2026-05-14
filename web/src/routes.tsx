@@ -18,23 +18,9 @@ export enum Routes {
   DatasetBase = '/dataset',
   Files = '/files',
   Dataset = `${Routes.DatasetBase}/${Routes.Files}`,
-  Agent = '/agent',
-  AgentTemplates = '/agent-templates',
-  Agents = '/agents',
-  Explore = '/explore',
-  AgentExplore = `${Routes.Agent}/:id/explore`,
-  Memories = '/memories',
-  Memory = '/memory',
-  MemoryMessage = '/memory-message',
-  MemorySetting = '/memory-setting',
-  AgentList = '/agent-list',
   Searches = '/searches',
   Search = '/search',
   SearchShare = '/search/share',
-  Chats = '/chats',
-  Chat = '/chat',
-
-  Skills = '/files/skills',
   ProfileSetting = '/profile-setting',
   Profile = '/profile',
   Api = '/api',
@@ -59,10 +45,6 @@ export enum Routes {
   Result = '/result',
   ResultView = `${Chunk}${Result}`,
   KnowledgeGraph = '/knowledge-graph',
-  AgentLogPage = '/agent-log-page',
-  AgentShare = '/agent/share',
-  ChatShare = `${Chats}/share`,
-  ChatWidget = `${Chats}/widget`,
   UserSetting = '/user-setting',
   DataSetOverview = '/logs',
   DataSetSetting = '/configuration',
@@ -116,25 +98,7 @@ const routeConfigOptions = [
     Component: () => import('@/pages/login-next'),
     layout: false,
   },
-  {
-    path: Routes.ChatShare,
-    Component: () => import('@/pages/next-chats/share'),
-    layout: false,
-  },
-  {
-    path: Routes.AgentShare,
-    Component: () => import('@/pages/agent/share'),
-    layout: false,
-  },
-  {
-    path: Routes.ChatWidget,
-    Component: () => import('@/pages/next-chats/widget'),
-    layout: false,
-  },
-  {
-    path: Routes.AgentList,
-    Component: () => import('@/pages/agents'),
-  },
+
   {
     path: '/document/:id',
     Component: () => import('@/pages/document-viewer'),
@@ -166,10 +130,7 @@ const routeConfigOptions = [
       },
     ],
   },
-  {
-    path: Routes.Chat + '/:id',
-    Component: () => import('@/pages/next-chats/chat'),
-  },
+
   {
     path: Routes.Root,
     Component: () => import('@/layouts/root-layout'),
@@ -204,10 +165,7 @@ const routeConfigOptions = [
           },
         ],
       },
-      {
-        path: Routes.Chats,
-        Component: () => import('@/pages/next-chats'),
-      },
+
       {
         path: Routes.Searches,
         Component: () => import('@/pages/next-searches'),
@@ -217,41 +175,12 @@ const routeConfigOptions = [
         layout: false,
         Component: () => import('@/pages/next-search'),
       },
-      {
-        path: Routes.Agents,
-        Component: () => import('@/pages/agents'),
-      },
-      {
-        path: Routes.AgentTemplates,
-        layout: false,
-        Component: () => import('@/pages/agents/agent-templates'),
-      },
-      {
-        path: Routes.Memories,
-        Component: () => import('@/pages/memories'),
-      },
-      {
-        path: `${Routes.Memory}`,
-        Component: () => import('@/pages/memory'),
-        children: [
-          {
-            path: `${Routes.Memory}/${Routes.MemoryMessage}/:id`,
-            Component: () => import('@/pages/memory/memory-message'),
-          },
-          {
-            path: `${Routes.Memory}/${Routes.MemorySetting}/:id`,
-            Component: () => import('@/pages/memory/memory-setting'),
-          },
-        ],
-      },
+
       {
         path: Routes.Files,
         Component: () => import('@/pages/files'),
       },
-      {
-        path: Routes.Skills,
-        Component: () => import('@/pages/skills'),
-      },
+
       {
         path: Routes.UserSetting,
         Component: () => import('@/pages/user-setting'),
@@ -308,24 +237,7 @@ const routeConfigOptions = [
     path: `${Routes.SearchShare}`,
     Component: () => import('@/pages/next-search/share'),
   },
-  {
-    path: Routes.Agent,
-    children: [
-      {
-        path: `${Routes.Agent}/:id`,
-        Component: () => import('@/pages/agent'),
-      },
-      {
-        path: Routes.AgentExplore,
-        Component: () => import('@/pages/agent/explore'),
-        errorElement: <FallbackComponent />,
-      },
-    ],
-  },
-  {
-    path: `${Routes.AgentLogPage}/:id`,
-    Component: () => import('@/pages/agents/agent-log-page'),
-  },
+
   {
     path: `${Routes.DataflowResult}`,
     Component: () => import('@/pages/dataflow-result'),
