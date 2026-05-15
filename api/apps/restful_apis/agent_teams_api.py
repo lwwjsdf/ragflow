@@ -21,6 +21,8 @@ from api.utils.agent_teams_auth import authenticate_by_api_key
 from api.utils.api_utils import get_json_result
 from common.constants import RetCode
 
+page_name = "agent_teams"
+
 
 @manager.route("/knowledge", methods=["GET"])  # noqa: F821
 def knowledge_redirect():

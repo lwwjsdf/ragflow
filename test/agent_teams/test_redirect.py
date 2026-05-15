@@ -95,7 +95,7 @@ def _load_agent_teams_module(monkeypatch):
 class TestKnowledgeRedirect:
     """Test suite for GET /knowledge redirect endpoint."""
 
-    def test_missing_api_key_returns_401(self, monkeypatch):
+    def test_missing_api_key(self, monkeypatch):
         module = _load_agent_teams_module(monkeypatch)
         monkeypatch.setattr(module, "request", SimpleNamespace(args={}))
 
@@ -105,7 +105,7 @@ class TestKnowledgeRedirect:
         assert "api_key" in result[0]["message"].lower() or "unauthorized" in result[0]["message"].lower()
         assert result[1] == 401
 
-    def test_invalid_api_key_returns_401(self, monkeypatch):
+    def test_invalid_api_key(self, monkeypatch):
         module = _load_agent_teams_module(monkeypatch)
         module.authenticate_by_api_key.return_value = None
         monkeypatch.setattr(module, "request", SimpleNamespace(args={"api_key": "invalid_key"}))
@@ -116,7 +116,7 @@ class TestKnowledgeRedirect:
         assert result[1] == 401
         module.authenticate_by_api_key.assert_called_once_with("invalid_key")
 
-    def test_valid_api_key_redirects_to_default_path(self, monkeypatch):
+    def test_valid_default_redirect(self, monkeypatch):
         module = _load_agent_teams_module(monkeypatch)
         mock_user = Mock()
         mock_user.email = "test@example.com"
@@ -130,7 +130,7 @@ class TestKnowledgeRedirect:
         assert result.status_code == 302
         assert result.headers["Location"] == "/knowledge/datasets"
 
-    def test_valid_api_key_redirects_to_custom_path(self, monkeypatch):
+    def test_valid_custom_redirect(self, monkeypatch):
         module = _load_agent_teams_module(monkeypatch)
         mock_user = Mock()
         mock_user.email = "test@example.com"
