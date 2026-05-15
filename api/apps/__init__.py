@@ -192,6 +192,18 @@ def _load_user():
     except Exception as e_api_token:
         logging.warning(f"load_user from api token got exception {e_api_token}")
 
+    # Try agent-teams API key from query parameters
+    try:
+        api_key = request.args.get("api_key")
+        if api_key:
+            from api.utils.agent_teams_auth import authenticate_by_api_key
+            auth_result = authenticate_by_api_key(api_key)
+            if auth_result:
+                g.user = auth_result["user"]
+                return auth_result["user"]
+    except Exception as e_api_key:
+        logging.warning(f"load_user from api_key got exception {e_api_key}")
+
     return _load_user_from_session()
 
 
