@@ -157,6 +157,7 @@ export const useFetchAgentListByPage = () => {
       return previousData;
     },
     gcTime: 0,
+    enabled: false,
     queryFn: async () => {
       const { data } = await agentService.listAgents(
         {
@@ -192,6 +193,7 @@ export const useFetchAgentListByPage = () => {
 export function useFetchAllAgentList() {
   const { data, isFetching: loading } = useQuery<IFlow[]>({
     queryKey: [AgentApiAction.FetchAllAgentList],
+    enabled: false,
     queryFn: async () => {
       const { data } = await agentService.listAgents(
         {
@@ -729,6 +731,7 @@ export const useFetchAgentList = ({
     queryKey: [AgentApiAction.FetchAgentList],
     initialData: { canvas: [], total: 0 },
     gcTime: 0,
+    enabled: false,
     queryFn: async () => {
       const { data } = await fetchPipeLineList({
         canvas_category,

@@ -23,7 +23,7 @@ from quart import Blueprint, Quart, request, g, current_app, session, jsonify
 from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 from quart_cors import cors
 from common.constants import StatusEnum, RetCode
-from api.db.db_models import close_connection, APIToken
+from api.db.db_models import close_connection
 from api.db.services import UserService
 from api.utils.json_encode import CustomJSONEncoder
 from api.utils import commands
@@ -177,18 +177,11 @@ def _load_user():
 
     # JWT decode failed, try as api_token
     try:
-        objs = APIToken.query(token=auth_token)
-        if objs:
-            user = UserService.query(id=objs[0].tenant_id, status=StatusEnum.VALID.value)
-            if user:
-                if not user[0].access_token or not user[0].access_token.strip():
-                    logging.warning(f"User {user[0].email} has empty access_token in database")
-                    return _load_user_from_session()
-                g.user = user[0]
-                return user[0]
-            logging.warning(f"load_user: No user found for tenant_id={objs[0].tenant_id} from APIToken")
-        else:
-            logging.warning(f"load_user: No APIToken found for token={auth_token[:10]}...")
+        from api.utils.agent_teams_auth import authenticate_by_api_key
+        auth_result = authenticate_by_api_key(auth_token)
+        if auth_result:
+            g.user = auth_result["user"]
+            return auth_result["user"]
     except Exception as e_api_token:
         logging.warning(f"load_user from api token got exception {e_api_token}")
 
@@ -196,7 +189,6 @@ def _load_user():
     try:
         api_key = request.args.get("api_key")
         if api_key:
-            from api.utils.agent_teams_auth import authenticate_by_api_key
             auth_result = authenticate_by_api_key(api_key)
             if auth_result:
                 g.user = auth_result["user"]

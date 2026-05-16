@@ -81,6 +81,7 @@ export const useFetchChatList = () => {
     initialData: { chats: [], total: 0 },
     gcTime: 0,
     refetchOnWindowFocus: false,
+    enabled: false,
     queryFn: async () => {
       const { data } = await chatService.listChats(
         {

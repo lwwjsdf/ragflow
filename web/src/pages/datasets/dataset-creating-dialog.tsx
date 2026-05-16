@@ -1,4 +1,3 @@
-import { DataFlowSelect } from '@/components/data-pipeline-select';
 import { ButtonLoading } from '@/components/ui/button';
 import {
   Dialog,
@@ -17,7 +16,6 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { FormLayout } from '@/constants/form';
 import { ParseType } from '@/constants/knowledge';
 import { useFetchTenantInfo } from '@/hooks/use-user-setting-request';
 import { IModalProps } from '@/interfaces/common';
@@ -139,17 +137,7 @@ export function InputForm({ onOk }: IModalProps<any>) {
 
         <EmbeddingModelItem line={2} isEdit={false} />
         <ParseTypeItem />
-        {parseType === ParseType.BuiltIn && (
-          <ChunkMethodItem name={ChunkMethodName}></ChunkMethodItem>
-        )}
-        {parseType === ParseType.Pipeline && (
-          <DataFlowSelect
-            isMult={false}
-            showToDataPipeline={true}
-            formFieldName="pipeline_id"
-            layout={FormLayout.Vertical}
-          />
-        )}
+        <ChunkMethodItem name={ChunkMethodName}></ChunkMethodItem>
       </form>
     </Form>
   );

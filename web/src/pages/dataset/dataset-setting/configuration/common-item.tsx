@@ -249,7 +249,6 @@ export function ParseTypeItem({
                     )}
                   >
                     <Radio value={ParseType.BuiltIn}>{t('builtIn')}</Radio>
-                    <Radio value={ParseType.Pipeline}>{t('manualSetup')}</Radio>
                   </div>
                 </Radio.Group>
               </FormControl>

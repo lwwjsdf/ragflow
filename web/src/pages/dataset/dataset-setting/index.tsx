@@ -1,4 +1,3 @@
-import { DataFlowSelect } from '@/components/data-pipeline-select';
 import GraphRagItems from '@/components/parse-configuration/graph-rag-form-fields';
 import RaptorFormFields from '@/components/parse-configuration/raptor-form-fields';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,6 @@ import {
 } from '@/components/ui/card';
 import Divider from '@/components/ui/divider';
 import { Form } from '@/components/ui/form';
-import { FormLayout } from '@/constants/form';
 import { DocumentParserType, ParseType } from '@/constants/knowledge';
 import { PermissionRole } from '@/constants/permission';
 import { IConnector, IDataset } from '@/interfaces/database/dataset';
@@ -308,23 +306,13 @@ export default function DatasetSettings() {
                       {t('knowledgeConfiguration.dataPipeline')}
                     </div>
                     <ParseTypeItem line={1} name="parse_type" />
-                    {parseType === ParseType.BuiltIn && (
-                      <ChunkMethodItem
-                        line={1}
-                        name="chunk_method"
-                      ></ChunkMethodItem>
-                    )}
-                    {parseType === ParseType.Pipeline && (
-                      <DataFlowSelect
-                        isMult={false}
-                        showToDataPipeline={true}
-                        formFieldName="pipeline_id"
-                        layout={FormLayout.Horizontal}
-                      />
-                    )}
+                    <ChunkMethodItem
+                      line={1}
+                      name="chunk_method"
+                    ></ChunkMethodItem>
 
                     {/* <Divider /> */}
-                    {parseType === ParseType.BuiltIn && <ChunkMethodForm />}
+                    <ChunkMethodForm />
 
                     {/* <LinkDataPipeline
                     data={pipelineData}

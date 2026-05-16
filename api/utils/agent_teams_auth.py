@@ -13,6 +13,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+"""Agent teams authentication utilities.
+
+This module provides helper functions for authenticating requests using
+agent-teams API keys. It bridges the API token service and user service
+to resolve API keys into valid user objects.
+"""
+
 import logging
 
 from api.db.services.api_service import APITokenService

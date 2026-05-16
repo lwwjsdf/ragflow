@@ -77,6 +77,36 @@ class TestAuthenticateByApiKey:
 
     @patch("api.utils.agent_teams_auth.APITokenService")
     @patch("api.utils.agent_teams_auth.UserService")
+    def test_user_with_none_access_token_returns_none(self, mock_user_service, mock_api_token_service):
+        """Test that user with None access_token returns None."""
+        token_obj = Mock()
+        token_obj.tenant_id = "tenant_123"
+        mock_api_token_service.query.return_value = [token_obj]
+
+        user = Mock()
+        user.email = "test@example.com"
+        user.access_token = None
+        mock_user_service.query.return_value = [user]
+
+        result = authenticate_by_api_key("valid_key")
+
+        assert result is None
+
+    @patch("api.utils.agent_teams_auth.APITokenService")
+    @patch("api.utils.agent_teams_auth.UserService")
+    def test_user_service_exception_returns_none(self, mock_user_service, mock_api_token_service):
+        """Test that exception from UserService.query returns None."""
+        token_obj = Mock()
+        token_obj.tenant_id = "tenant_123"
+        mock_api_token_service.query.return_value = [token_obj]
+        mock_user_service.query.side_effect = Exception("DB error")
+
+        result = authenticate_by_api_key("valid_key")
+
+        assert result is None
+
+    @patch("api.utils.agent_teams_auth.APITokenService")
+    @patch("api.utils.agent_teams_auth.UserService")
     def test_valid_api_key_returns_auth_result(self, mock_user_service, mock_api_token_service):
         """Test that valid api_key returns auth result with tenant_id and user."""
         token_obj = Mock()
