@@ -17,173 +17,174 @@
 """Unit tests for MCP tools list endpoint."""
 
 import asyncio
-import importlib.util
-import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import Mock
+
+import pytest
+
+from api.apps.restful_apis import agent_teams_api
 
 
 class _DummyManager:
     def route(self, *_args, **_kwargs):
         def decorator(func):
             return func
-
         return decorator
 
 
-def _load_agent_teams_module(monkeypatch):
-    from pathlib import Path
+@pytest.fixture(autouse=True)
+def _patch_manager(monkeypatch):
+    monkeypatch.setattr(agent_teams_api, "manager", _DummyManager())
 
-    repo_root = Path(__file__).resolve().parents[2]
 
-    api_pkg = ModuleType("api")
-    api_pkg.__path__ = [str(repo_root / "api")]
-    monkeypatch.setitem(sys.modules, "api", api_pkg)
+@pytest.fixture
+def auth_mock(monkeypatch):
+    mock = Mock(return_value=None)
+    monkeypatch.setattr(agent_teams_api, "authenticate_by_api_key", mock)
+    return mock
 
-    apps_mod = ModuleType("api.apps")
-    apps_mod.__path__ = [str(repo_root / "api" / "apps")]
-    apps_mod.login_user = Mock(return_value=True)
-    monkeypatch.setitem(sys.modules, "api.apps", apps_mod)
 
-    common_pkg = ModuleType("common")
-    common_pkg.__path__ = [str(repo_root / "common")]
-    monkeypatch.setitem(sys.modules, "common", common_pkg)
+@pytest.fixture
+def valid_user():
+    mock_user = Mock()
+    mock_user.email = "test@example.com"
+    return {"tenant_id": "tenant_123", "user": mock_user}
 
-    constants_mod = ModuleType("common.constants")
-    constants_mod.RetCode = SimpleNamespace(
-        SUCCESS=0,
-        UNAUTHORIZED=401,
-        FORBIDDEN=403,
-        NOT_FOUND=404,
-        ARGUMENT_ERROR=101,
-        OPERATING_ERROR=102,
-    )
-    monkeypatch.setitem(sys.modules, "common.constants", constants_mod)
 
-    api_utils_mod = ModuleType("api.utils.api_utils")
-    api_utils_mod.get_json_result = lambda data=None, message="success", code=0: {
-        "code": code,
-        "message": message,
-        "data": data,
-    }
-    monkeypatch.setitem(sys.modules, "api.utils.api_utils", api_utils_mod)
+async def _async_get_json(body):
+    return body
 
-    auth_mod = ModuleType("api.utils.agent_teams_auth")
-    auth_mod.authenticate_by_api_key = Mock(return_value=None)
-    monkeypatch.setitem(sys.modules, "api.utils.agent_teams_auth", auth_mod)
 
-    quart_mod = ModuleType("quart")
-    quart_mod.request = SimpleNamespace(headers={}, args={})
-    quart_mod.redirect = lambda location, code=302: SimpleNamespace(
-        status_code=code, headers={"Location": location}
-    )
-    monkeypatch.setitem(sys.modules, "quart", quart_mod)
-
-    module_path = repo_root / "api" / "apps" / "restful_apis" / "agent_teams_api.py"
-    spec = importlib.util.spec_from_file_location("agent_teams_api_test_module", str(module_path))
-    module = importlib.util.module_from_spec(spec)
-    module.manager = _DummyManager()
-    monkeypatch.setitem(sys.modules, "agent_teams_api_test_module", module)
-    spec.loader.exec_module(module)
-    return module
+def _make_request(headers, body=None):
+    req = SimpleNamespace(headers=headers)
+    req.get_json = Mock(return_value=_async_get_json(body))
+    return req
 
 
 class TestMcpToolsList:
     """Test suite for POST /mcp/v1/tools/list endpoint."""
 
-    def test_missing_auth_header_returns_401(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        monkeypatch.setattr(module, "request", SimpleNamespace(headers={}))
+    def test_missing_auth_header_returns_401(self, monkeypatch, auth_mock):
+        monkeypatch.setattr(
+            agent_teams_api, "request", _make_request(headers={}, body={"jsonrpc": "2.0"})
+        )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
         assert result[1] == 401
         assert result[0]["jsonrpc"] == "2.0"
         assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32001
         assert result[0]["error"]["message"] == "Unauthorized"
 
-    def test_invalid_auth_header_returns_401(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        module.authenticate_by_api_key.return_value = None
+    def test_invalid_auth_header_returns_401(self, monkeypatch, auth_mock):
         monkeypatch.setattr(
-            module, "request", SimpleNamespace(headers={"Authorization": "InvalidFormat"})
+            agent_teams_api,
+            "request",
+            _make_request(headers={"Authorization": "InvalidFormat"}, body={"jsonrpc": "2.0"}),
         )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
         assert result[1] == 401
         assert result[0]["jsonrpc"] == "2.0"
         assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32001
 
-    def test_invalid_api_key_returns_401(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        module.authenticate_by_api_key.return_value = None
+    def test_invalid_api_key_returns_401(self, monkeypatch, auth_mock):
         monkeypatch.setattr(
-            module, "request", SimpleNamespace(headers={"Authorization": "Bearer invalid_key"})
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer invalid_key"}, body={"jsonrpc": "2.0"}
+            ),
         )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
         assert result[1] == 401
         assert result[0]["jsonrpc"] == "2.0"
         assert "error" in result[0]
-        module.authenticate_by_api_key.assert_called_once_with("invalid_key")
+        assert result[0]["error"]["code"] == -32001
+        auth_mock.assert_called_once_with("invalid_key")
 
-    def test_valid_auth_returns_tool_list(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        mock_user = Mock()
-        mock_user.email = "test@example.com"
-        module.authenticate_by_api_key.return_value = {"tenant_id": "tenant_123", "user": mock_user}
+    def test_invalid_jsonrpc_returns_400(self, monkeypatch, auth_mock):
         monkeypatch.setattr(
-            module, "request", SimpleNamespace(headers={"Authorization": "Bearer sk_valid123"})
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"},
+                body={"jsonrpc": "1.0", "id": 42},
+            ),
         )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
-        module.authenticate_by_api_key.assert_called_once_with("sk_valid123")
+        assert result[1] == 400
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["error"]["code"] == -32600
+        assert result[0]["error"]["message"] == "Invalid Request"
+        assert result[0]["id"] == 42
+
+    def test_valid_auth_returns_tool_list(self, monkeypatch, auth_mock, valid_user):
+        auth_mock.return_value = valid_user
+        monkeypatch.setattr(
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"}, body={"jsonrpc": "2.0", "id": 1}
+            ),
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
+
+        auth_mock.assert_called_once_with("sk_valid123")
         assert result["jsonrpc"] == "2.0"
         assert "result" in result
         assert "tools" in result["result"]
         assert len(result["result"]["tools"]) == 2
 
-    def test_response_contains_search_knowledge_base_tool(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        mock_user = Mock()
-        mock_user.email = "test@example.com"
-        module.authenticate_by_api_key.return_value = {"tenant_id": "tenant_123", "user": mock_user}
+    def test_response_contains_search_knowledge_base_tool(self, monkeypatch, auth_mock, valid_user):
+        auth_mock.return_value = valid_user
         monkeypatch.setattr(
-            module, "request", SimpleNamespace(headers={"Authorization": "Bearer sk_valid123"})
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"}, body={"jsonrpc": "2.0", "id": 1}
+            ),
         )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
         tool_names = [t["name"] for t in result["result"]["tools"]]
         assert "search_knowledge_base" in tool_names
 
-    def test_response_contains_list_knowledge_bases_tool(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        mock_user = Mock()
-        mock_user.email = "test@example.com"
-        module.authenticate_by_api_key.return_value = {"tenant_id": "tenant_123", "user": mock_user}
+    def test_response_contains_list_knowledge_bases_tool(self, monkeypatch, auth_mock, valid_user):
+        auth_mock.return_value = valid_user
         monkeypatch.setattr(
-            module, "request", SimpleNamespace(headers={"Authorization": "Bearer sk_valid123"})
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"}, body={"jsonrpc": "2.0", "id": 1}
+            ),
         )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
         tool_names = [t["name"] for t in result["result"]["tools"]]
         assert "list_knowledge_bases" in tool_names
 
-    def test_search_knowledge_base_tool_structure(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        mock_user = Mock()
-        mock_user.email = "test@example.com"
-        module.authenticate_by_api_key.return_value = {"tenant_id": "tenant_123", "user": mock_user}
+    def test_search_knowledge_base_tool_structure(self, monkeypatch, auth_mock, valid_user):
+        auth_mock.return_value = valid_user
         monkeypatch.setattr(
-            module, "request", SimpleNamespace(headers={"Authorization": "Bearer sk_valid123"})
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"}, body={"jsonrpc": "2.0", "id": 1}
+            ),
         )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
         tool = next(
             t for t in result["result"]["tools"] if t["name"] == "search_knowledge_base"
@@ -196,16 +197,17 @@ class TestMcpToolsList:
         assert "top_n" in tool["parameters"]["properties"]
         assert tool["parameters"]["required"] == ["query"]
 
-    def test_list_knowledge_bases_tool_structure(self, monkeypatch):
-        module = _load_agent_teams_module(monkeypatch)
-        mock_user = Mock()
-        mock_user.email = "test@example.com"
-        module.authenticate_by_api_key.return_value = {"tenant_id": "tenant_123", "user": mock_user}
+    def test_list_knowledge_bases_tool_structure(self, monkeypatch, auth_mock, valid_user):
+        auth_mock.return_value = valid_user
         monkeypatch.setattr(
-            module, "request", SimpleNamespace(headers={"Authorization": "Bearer sk_valid123"})
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"}, body={"jsonrpc": "2.0", "id": 1}
+            ),
         )
 
-        result = asyncio.run(module.mcp_tools_list())
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
 
         tool = next(
             t for t in result["result"]["tools"] if t["name"] == "list_knowledge_bases"
@@ -215,3 +217,34 @@ class TestMcpToolsList:
         assert tool["parameters"]["type"] == "object"
         assert tool["parameters"]["properties"] == {}
         assert tool["parameters"]["required"] == []
+
+    @pytest.mark.parametrize("rpc_id", [1, "abc", None])
+    def test_request_id_echoed_in_response(self, monkeypatch, auth_mock, valid_user, rpc_id):
+        auth_mock.return_value = valid_user
+        monkeypatch.setattr(
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"},
+                body={"jsonrpc": "2.0", "id": rpc_id},
+            ),
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
+
+        assert result["id"] == rpc_id
+
+    def test_missing_id_returns_null_id(self, monkeypatch, auth_mock, valid_user):
+        auth_mock.return_value = valid_user
+        monkeypatch.setattr(
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"},
+                body={"jsonrpc": "2.0"},
+            ),
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_list())
+
+        assert result["id"] is None
