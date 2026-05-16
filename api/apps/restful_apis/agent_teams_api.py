@@ -39,3 +39,55 @@ def knowledge_redirect():
 
     redirect_path = request.args.get("redirect", "/knowledge/datasets")
     return redirect(redirect_path)
+
+
+@manager.route("/mcp/v1/tools/list", methods=["POST"])  # noqa: F821
+async def mcp_tools_list():
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        return (
+            {"jsonrpc": "2.0", "error": {"code": -32001, "message": "Unauthorized"}, "id": None},
+            401,
+        )
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return (
+            {"jsonrpc": "2.0", "error": {"code": -32001, "message": "Unauthorized"}, "id": None},
+            401,
+        )
+
+    api_key = parts[1]
+    auth_result = authenticate_by_api_key(api_key)
+    if not auth_result:
+        return (
+            {"jsonrpc": "2.0", "error": {"code": -32001, "message": "Unauthorized"}, "id": None},
+            401,
+        )
+
+    tools = [
+        {
+            "name": "search_knowledge_base",
+            "description": "在知识库中检索与查询相关的内容，返回匹配的文本片段",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "检索查询文本"},
+                    "dataset_ids": {"type": "array", "items": {"type": "string"}, "description": "知识库ID列表"},
+                    "top_n": {"type": "integer", "default": 8, "description": "返回结果数量"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "list_knowledge_bases",
+            "description": "列出当前租户下的所有知识库",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "result": {"tools": tools},
+        "id": 1,
+    }
