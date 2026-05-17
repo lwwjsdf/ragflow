@@ -68,6 +68,13 @@ export default function Datasets() {
     }
   }, [isCreate, showModal, searchUrl, setSearchUrl, queryClient]);
 
+  useEffect(() => {
+    const apiKey = searchUrl.get('api_key');
+    if (apiKey) {
+      console.log('[Debug] api_key found in query params:', apiKey);
+    }
+  }, [searchUrl]);
+
   return (
     <>
       {kbs?.length || searchString ? (
