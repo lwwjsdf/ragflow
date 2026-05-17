@@ -57,7 +57,16 @@ def _load_agent_teams_module(monkeypatch):
         ARGUMENT_ERROR=101,
         OPERATING_ERROR=102,
     )
+    constants_mod.LLMType = SimpleNamespace(EMBEDDING="embedding", RERANK="rerank", CHAT="chat")
+    constants_mod.PAGERANK_FLD = "pagerank_fld"
+    constants_mod.TAG_FLD = "tag_fld"
     monkeypatch.setitem(sys.modules, "common.constants", constants_mod)
+
+    settings_mod = ModuleType("common.settings")
+    settings_mod.retriever = Mock()
+    settings_mod.kg_retriever = Mock()
+    settings_mod.DOC_ENGINE_INFINITY = False
+    monkeypatch.setitem(sys.modules, "common.settings", settings_mod)
 
     api_utils_mod = ModuleType("api.utils.api_utils")
     api_utils_mod.get_json_result = lambda data=None, message="success", code=0: {
@@ -70,6 +79,20 @@ def _load_agent_teams_module(monkeypatch):
     auth_mod = ModuleType("api.utils.agent_teams_auth")
     auth_mod.authenticate_by_api_key = Mock(return_value=None)
     monkeypatch.setitem(sys.modules, "api.utils.agent_teams_auth", auth_mod)
+
+    kb_service_mod = ModuleType("api.db.services.knowledgebase_service")
+    kb_service_mod.KnowledgebaseService = Mock()
+    monkeypatch.setitem(sys.modules, "api.db.services.knowledgebase_service", kb_service_mod)
+
+    llm_service_mod = ModuleType("api.db.services.llm_service")
+    llm_service_mod.LLMBundle = Mock()
+    monkeypatch.setitem(sys.modules, "api.db.services.llm_service", llm_service_mod)
+
+    tenant_model_mod = ModuleType("api.db.joint_services.tenant_model_service")
+    tenant_model_mod.get_model_config_by_type_and_name = Mock(return_value=None)
+    tenant_model_mod.get_model_config_by_id = Mock(return_value=None)
+    tenant_model_mod.get_tenant_default_model_by_type = Mock(return_value=None)
+    monkeypatch.setitem(sys.modules, "api.db.joint_services.tenant_model_service", tenant_model_mod)
 
     quart_mod = ModuleType("quart")
     quart_mod.request = SimpleNamespace(args={})
