@@ -30,6 +30,15 @@ from common.constants import LLMType, RetCode
 
 page_name = "agent_teams"
 
+# Default and maximum values for search parameters
+DEFAULT_TOP_N = 8
+MAX_TOP_N = 100
+
+# Retrieval similarity tuning constants
+SIMILARITY_THRESHOLD = 0.2  # Minimum similarity score to include a chunk
+VECTOR_SIMILARITY_WEIGHT = 0.3  # Weight given to vector similarity vs keyword
+RETRIEVAL_TOP_CANDIDATES = 1024  # Number of candidates to retrieve before ranking
+
 
 def _mcp_auth_error(rpc_id):
     return (
@@ -46,27 +55,24 @@ def _mcp_invalid_request_error(rpc_id):
 
 
 def _mcp_method_not_found_error(rpc_id, method_name):
-    return {
-        "jsonrpc": "2.0",
-        "error": {"code": -32601, "message": f"Method not found: {method_name}"},
-        "id": rpc_id,
-    }
+    return (
+        {"jsonrpc": "2.0", "error": {"code": -32601, "message": f"Method not found: {method_name}"}, "id": rpc_id},
+        200,
+    )
 
 
 def _mcp_invalid_params_error(rpc_id, message):
-    return {
-        "jsonrpc": "2.0",
-        "error": {"code": -32602, "message": message},
-        "id": rpc_id,
-    }
+    return (
+        {"jsonrpc": "2.0", "error": {"code": -32602, "message": message}, "id": rpc_id},
+        200,
+    )
 
 
 def _mcp_internal_error(rpc_id, message):
-    return {
-        "jsonrpc": "2.0",
-        "error": {"code": -32000, "message": message},
-        "id": rpc_id,
-    }
+    return (
+        {"jsonrpc": "2.0", "error": {"code": -32000, "message": message}, "id": rpc_id},
+        200,
+    )
 
 
 async def _authenticate_mcp_request(body):
@@ -151,9 +157,13 @@ async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
         return _mcp_invalid_params_error(rpc_id, "Missing required parameter: query")
 
     dataset_ids = arguments.get("dataset_ids", []) or []
-    top_n = arguments.get("top_n", 8)
-    if not isinstance(top_n, int) or top_n <= 0:
-        top_n = 8
+    if dataset_ids is not None and not isinstance(dataset_ids, list):
+        return _mcp_invalid_params_error(rpc_id, "Invalid parameter: dataset_ids must be a list")
+
+    top_n = arguments.get("top_n", DEFAULT_TOP_N)
+    if not isinstance(top_n, int) or top_n < 1:
+        top_n = DEFAULT_TOP_N
+    top_n = min(top_n, MAX_TOP_N)
 
     # If no dataset_ids provided, use all tenant KBs
     if not dataset_ids:
@@ -198,9 +208,9 @@ async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
             dataset_ids,
             page=1,
             page_size=top_n,
-            similarity_threshold=0.2,
-            vector_similarity_weight=0.3,
-            top=1024,
+            similarity_threshold=SIMILARITY_THRESHOLD,
+            vector_similarity_weight=VECTOR_SIMILARITY_WEIGHT,
+            top=RETRIEVAL_TOP_CANDIDATES,
             aggs=False,
         )
 
@@ -226,9 +236,9 @@ async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
             "result": {"content": [{"type": "text", "text": result_text}]},
             "id": rpc_id,
         }
-    except Exception as e:
+    except Exception:
         logging.exception("search_knowledge_base failed")
-        return _mcp_internal_error(rpc_id, str(e))
+        return _mcp_internal_error(rpc_id, "Internal error")
 
 
 async def _handle_list_knowledge_bases(tenant_id, rpc_id):
@@ -253,9 +263,9 @@ async def _handle_list_knowledge_bases(tenant_id, rpc_id):
             "result": {"content": [{"type": "text", "text": result_text}]},
             "id": rpc_id,
         }
-    except Exception as e:
+    except Exception:
         logging.exception("list_knowledge_bases failed")
-        return _mcp_internal_error(rpc_id, str(e))
+        return _mcp_internal_error(rpc_id, "Internal error")
 
 
 @manager.route("/mcp/v1/tools/call", methods=["POST"])  # noqa: F821
@@ -270,6 +280,8 @@ async def mcp_tools_call():
 
     tenant_id = auth_result["tenant_id"]
     params = body.get("params", {})
+    if not isinstance(params, dict):
+        return _mcp_invalid_params_error(rpc_id, "Invalid params structure")
     tool_name = params.get("name")
     arguments = params.get("arguments", {})
 

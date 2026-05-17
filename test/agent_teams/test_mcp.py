@@ -332,11 +332,12 @@ class TestMcpToolsCall:
 
         result = asyncio.run(agent_teams_api.mcp_tools_call())
 
-        assert result["jsonrpc"] == "2.0"
-        assert result["id"] == 1
-        assert "error" in result
-        assert result["error"]["code"] == -32601
-        assert "invalid_tool" in result["error"]["message"]
+        assert result[1] == 200
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["id"] == 1
+        assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32601
+        assert "invalid_tool" in result[0]["error"]["message"]
 
     def test_search_missing_query_returns_error(self, monkeypatch, auth_mock, valid_user):
         self._setup_auth(auth_mock, valid_user)
@@ -351,11 +352,12 @@ class TestMcpToolsCall:
 
         result = asyncio.run(agent_teams_api.mcp_tools_call())
 
-        assert result["jsonrpc"] == "2.0"
-        assert result["id"] == 1
-        assert "error" in result
-        assert result["error"]["code"] == -32602
-        assert "query" in result["error"]["message"]
+        assert result[1] == 200
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["id"] == 1
+        assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32602
+        assert "query" in result[0]["error"]["message"]
 
     @patch("api.apps.restful_apis.agent_teams_api.settings")
     @patch("api.apps.restful_apis.agent_teams_api.KnowledgebaseService")
@@ -472,11 +474,12 @@ class TestMcpToolsCall:
 
         result = asyncio.run(agent_teams_api.mcp_tools_call())
 
-        assert result["jsonrpc"] == "2.0"
-        assert result["id"] == 1
-        assert "error" in result
-        assert result["error"]["code"] == -32000
-        assert "Retriever failure" in result["error"]["message"]
+        assert result[1] == 200
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["id"] == 1
+        assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32000
+        assert result[0]["error"]["message"] == "Internal error"
 
     @patch("api.apps.restful_apis.agent_teams_api.KnowledgebaseService")
     def test_list_knowledge_bases_returns_kb_list(self, mock_kb_service, monkeypatch, auth_mock, valid_user):
@@ -534,11 +537,12 @@ class TestMcpToolsCall:
 
         result = asyncio.run(agent_teams_api.mcp_tools_call())
 
-        assert result["jsonrpc"] == "2.0"
-        assert result["id"] == 1
-        assert "error" in result
-        assert result["error"]["code"] == -32602
-        assert "Invalid dataset_ids" in result["error"]["message"]
+        assert result[1] == 200
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["id"] == 1
+        assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32602
+        assert "Invalid dataset_ids" in result[0]["error"]["message"]
 
     @patch("api.apps.restful_apis.agent_teams_api.KnowledgebaseService")
     def test_tenant_isolation_for_list(self, mock_kb_service, monkeypatch, auth_mock, valid_user):
@@ -564,3 +568,166 @@ class TestMcpToolsCall:
 
         parsed = json.loads(result["result"]["content"][0]["text"])
         assert parsed["knowledge_bases"] == []
+
+    @pytest.mark.parametrize("params_value", ["string", [], 42, None])
+    def test_invalid_params_type_returns_error(self, monkeypatch, auth_mock, valid_user, params_value):
+        self._setup_auth(auth_mock, valid_user)
+        self._setup_request(
+            monkeypatch,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "params": params_value,
+            },
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result[1] == 200
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["id"] == 1
+        assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32602
+
+    def test_missing_params_key_defaults_to_empty(self, monkeypatch, auth_mock, valid_user):
+        self._setup_auth(auth_mock, valid_user)
+        self._setup_request(
+            monkeypatch,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+            },
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result[1] == 200
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["id"] == 1
+        assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32601
+
+    @pytest.mark.parametrize("top_n", [-5, 0, 1000])
+    @patch("api.apps.restful_apis.agent_teams_api.settings")
+    @patch("api.apps.restful_apis.agent_teams_api.KnowledgebaseService")
+    @patch("api.apps.restful_apis.agent_teams_api.LLMBundle")
+    @patch("api.apps.restful_apis.agent_teams_api.get_model_config_by_type_and_name")
+    def test_search_top_n_bounds(
+        self,
+        mock_get_model_config,
+        mock_llm_bundle,
+        mock_kb_service,
+        mock_settings,
+        monkeypatch,
+        auth_mock,
+        valid_user,
+        top_n,
+    ):
+        self._setup_auth(auth_mock, valid_user)
+
+        mock_kb = Mock()
+        mock_kb.id = "kb_123"
+        mock_kb.embd_id = "embd_1"
+        mock_kb.tenant_id = "tenant_123"
+        mock_kb_service.get_kb_ids.return_value = ["kb_123"]
+        mock_kb_service.get_by_ids.return_value = [mock_kb]
+
+        mock_retriever = Mock()
+        mock_retriever.retrieval = Mock(return_value=asyncio.Future())
+        mock_retriever.retrieval.return_value.set_result({"chunks": [], "total": 0})
+        mock_settings.retriever = mock_retriever
+
+        self._setup_request(
+            monkeypatch,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "params": {
+                    "name": "search_knowledge_base",
+                    "arguments": {"query": "test", "dataset_ids": ["kb_123"], "top_n": top_n},
+                },
+            },
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result["jsonrpc"] == "2.0"
+        assert result["id"] == 1
+        assert "result" in result
+
+        call_kwargs = mock_retriever.retrieval.call_args.kwargs
+        expected_top_n = 8 if top_n <= 0 else min(top_n, 100)
+        assert call_kwargs["page_size"] == expected_top_n
+
+    @pytest.mark.parametrize("dataset_ids", ["kb_123", {"id": "kb_123"}])
+    def test_search_dataset_ids_type_mismatch_returns_error(self, monkeypatch, auth_mock, valid_user, dataset_ids):
+        self._setup_auth(auth_mock, valid_user)
+        self._setup_request(
+            monkeypatch,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "params": {
+                    "name": "search_knowledge_base",
+                    "arguments": {"query": "test", "dataset_ids": dataset_ids},
+                },
+            },
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result[1] == 200
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["id"] == 1
+        assert "error" in result[0]
+        assert result[0]["error"]["code"] == -32602
+        assert "dataset_ids" in result[0]["error"]["message"]
+
+    @patch("api.apps.restful_apis.agent_teams_api.settings")
+    @patch("api.apps.restful_apis.agent_teams_api.KnowledgebaseService")
+    @patch("api.apps.restful_apis.agent_teams_api.LLMBundle")
+    @patch("api.apps.restful_apis.agent_teams_api.get_model_config_by_type_and_name")
+    def test_search_no_dataset_ids_fallback_to_tenant_kbs(
+        self,
+        mock_get_model_config,
+        mock_llm_bundle,
+        mock_kb_service,
+        mock_settings,
+        monkeypatch,
+        auth_mock,
+        valid_user,
+    ):
+        self._setup_auth(auth_mock, valid_user)
+
+        mock_kb = Mock()
+        mock_kb.id = "kb_123"
+        mock_kb.embd_id = "embd_1"
+        mock_kb.tenant_id = "tenant_123"
+        mock_kb_service.get_kb_ids.return_value = ["kb_123"]
+        mock_kb_service.get_by_ids.return_value = [mock_kb]
+
+        mock_retriever = Mock()
+        mock_retriever.retrieval = Mock(return_value=asyncio.Future())
+        mock_retriever.retrieval.return_value.set_result({"chunks": [], "total": 0})
+        mock_settings.retriever = mock_retriever
+
+        self._setup_request(
+            monkeypatch,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "params": {
+                    "name": "search_knowledge_base",
+                    "arguments": {"query": "test"},
+                },
+            },
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result["jsonrpc"] == "2.0"
+        assert result["id"] == 1
+        assert "result" in result
+
+        call_args = mock_retriever.retrieval.call_args
+        assert call_args.args[3] == ["kb_123"]
