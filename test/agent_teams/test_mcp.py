@@ -264,6 +264,61 @@ class TestMcpToolsCall:
         assert "error" in result[0]
         assert result[0]["error"]["code"] == -32001
 
+    def test_missing_jsonrpc_returns_400(self, monkeypatch, auth_mock):
+        monkeypatch.setattr(
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"},
+                body={"id": 42},
+            ),
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result[1] == 400
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["error"]["code"] == -32600
+        assert result[0]["error"]["message"] == "Invalid Request"
+        assert result[0]["id"] == 42
+
+    def test_invalid_jsonrpc_returns_400(self, monkeypatch, auth_mock):
+        monkeypatch.setattr(
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"},
+                body={"jsonrpc": "1.0", "id": 42},
+            ),
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result[1] == 400
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["error"]["code"] == -32600
+        assert result[0]["error"]["message"] == "Invalid Request"
+        assert result[0]["id"] == 42
+
+    @pytest.mark.parametrize("body", [[], "string", 42, None])
+    def test_non_dict_body_returns_400(self, monkeypatch, auth_mock, body):
+        monkeypatch.setattr(
+            agent_teams_api,
+            "request",
+            _make_request(
+                headers={"Authorization": "Bearer sk_valid123"},
+                body=body,
+            ),
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result[1] == 400
+        assert result[0]["jsonrpc"] == "2.0"
+        assert result[0]["error"]["code"] == -32600
+        assert result[0]["error"]["message"] == "Invalid Request"
+        assert result[0]["id"] is None
+
     def test_invalid_tool_name_returns_error(self, monkeypatch, auth_mock, valid_user):
         self._setup_auth(auth_mock, valid_user)
         self._setup_request(
@@ -372,6 +427,56 @@ class TestMcpToolsCall:
         assert parsed["chunks"][0]["score"] == 0.95
         assert parsed["chunks"][0]["document_name"] == "ssl_guide.pdf"
         assert parsed["chunks"][0]["dataset_id"] == "kb_123"
+
+    @patch("api.apps.restful_apis.agent_teams_api.settings")
+    @patch("api.apps.restful_apis.agent_teams_api.KnowledgebaseService")
+    @patch("api.apps.restful_apis.agent_teams_api.LLMBundle")
+    @patch("api.apps.restful_apis.agent_teams_api.get_model_config_by_type_and_name")
+    def test_search_internal_error_returns_32000(
+        self,
+        mock_get_model_config,
+        mock_llm_bundle,
+        mock_kb_service,
+        mock_settings,
+        monkeypatch,
+        auth_mock,
+        valid_user,
+    ):
+        self._setup_auth(auth_mock, valid_user)
+
+        # Mock KB
+        mock_kb = Mock()
+        mock_kb.id = "kb_123"
+        mock_kb.embd_id = "embd_1"
+        mock_kb.tenant_id = "tenant_123"
+        mock_kb_service.get_kb_ids.return_value = ["kb_123"]
+        mock_kb_service.get_by_ids.return_value = [mock_kb]
+
+        # Mock retriever to raise exception
+        mock_retriever = Mock()
+        mock_retriever.retrieval = Mock(return_value=asyncio.Future())
+        mock_retriever.retrieval.return_value.set_exception(RuntimeError("Retriever failure"))
+        mock_settings.retriever = mock_retriever
+
+        self._setup_request(
+            monkeypatch,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "params": {
+                    "name": "search_knowledge_base",
+                    "arguments": {"query": "SSL", "dataset_ids": ["kb_123"], "top_n": 5},
+                },
+            },
+        )
+
+        result = asyncio.run(agent_teams_api.mcp_tools_call())
+
+        assert result["jsonrpc"] == "2.0"
+        assert result["id"] == 1
+        assert "error" in result
+        assert result["error"]["code"] == -32000
+        assert "Retriever failure" in result["error"]["message"]
 
     @patch("api.apps.restful_apis.agent_teams_api.KnowledgebaseService")
     def test_list_knowledge_bases_returns_kb_list(self, mock_kb_service, monkeypatch, auth_mock, valid_user):
