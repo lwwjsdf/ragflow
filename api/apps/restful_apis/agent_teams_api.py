@@ -284,6 +284,8 @@ async def mcp_tools_call():
         return _mcp_invalid_params_error(rpc_id, "Invalid params structure")
     tool_name = params.get("name")
     arguments = params.get("arguments", {})
+    if not isinstance(arguments, dict):
+        return _mcp_invalid_params_error(rpc_id, "Invalid arguments structure")
 
     if tool_name == "search_knowledge_base":
         return await _handle_search_knowledge_base(tenant_id, arguments, rpc_id)
