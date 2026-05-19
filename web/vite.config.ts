@@ -131,6 +131,23 @@ export default defineConfig(({ mode }) => {
         ws: true,
       },
     },
+    remote: {
+      '/api/v1/admin': {
+        target: 'http://72.62.197.172:9381/',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/api': {
+        target: 'http://72.62.197.172:9380/',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/v1': {
+        target: 'http://72.62.197.172:9380/',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   };
 
   const proxy = proxySchemes[proxyScheme] || proxySchemes.python;
