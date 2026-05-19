@@ -552,7 +552,7 @@ Prosedürel Bellek: Öğrenilen beceriler, alışkanlıklar ve otomatik prosedü
       changeSpecificCategory: 'Belirli kategoriyi değiştir',
       uploadTitle: 'Yüklemek için dosyanızı buraya sürükleyip bırakın',
       uploadDescription:
-        'Tekil veya toplu dosya yüklemeyi destekler. Yerel olarak dağıtılan RAGFlow için: yükleme başına toplam dosya boyutu sınırı 1GB, 32 dosyalık toplu yükleme sınırı vardır. Hesap başına toplam dosya sayısında sınır yoktur. cloud.ragflow.io için yükleme başına toplam dosya boyutu sınırı 10MB, her dosya en fazla 10MB ve hesap başına en fazla 128 dosya.',
+        'Tekil veya toplu dosya yüklemeyi destekler. Yerel olarak dağıtılan RAGFlow için: yükleme başına toplam dosya boyutu sınırı 1GB, 32 dosyalık toplu yükleme sınırı vardır. Hesap başına toplam dosya sayısında sınır yoktur. cloud.ragflow.io için yükleme başına toplam dosya boyutu sınırı 30MB, her dosya en fazla 30MB ve hesap başına en fazla 128 dosya.',
       chunk: 'Parça',
       bulk: 'Toplu',
       cancel: 'İptal',
@@ -1628,7 +1628,7 @@ Bu otomatik etiketleme özelliği, mevcut datasete alanına özgü bilgi katman�
       preview: 'Önizleme',
       fileError: 'Dosya hatası',
       uploadLimit:
-        "Her dosya 10MB'ı geçemez ve toplam dosya sayısı 128'i geçemez.",
+        "Her dosya 30MB'ı geçemez ve toplam dosya sayısı 128'i geçemez.",
       destinationFolder: 'Hedef klasör',
       pleaseUploadAtLeastOneFile: 'Lütfen en az bir dosya yükleyin',
     },

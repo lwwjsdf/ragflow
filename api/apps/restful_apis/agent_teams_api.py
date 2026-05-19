@@ -17,7 +17,7 @@
 import json
 import logging
 
-from quart import redirect, request
+from quart import Response, redirect, request, stream_with_context
 
 from api.apps import login_user
 from api.db.joint_services.tenant_model_service import get_model_config_by_type_and_name
@@ -114,16 +114,25 @@ def knowledge_redirect():
     return redirect(redirect_path)
 
 
-TOOLS = [
+# MCP tool definitions
+MCP_TOOLS = [
     {
         "name": "search_knowledge_base",
         "description": "在知识库中检索与查询相关的内容，返回匹配的文本片段",
-        "parameters": {
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "检索查询文本"},
-                "dataset_ids": {"type": "array", "items": {"type": "string"}, "description": "知识库ID列表"},
-                "top_n": {"type": "integer", "default": 8, "description": "返回结果数量"},
+                "dataset_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "知识库ID列表，为空时检索所有知识库",
+                },
+                "top_n": {
+                    "type": "integer",
+                    "default": 8,
+                    "description": "返回结果数量",
+                },
             },
             "required": ["query"],
         },
@@ -131,24 +140,80 @@ TOOLS = [
     {
         "name": "list_knowledge_bases",
         "description": "列出当前租户下的所有知识库",
-        "parameters": {"type": "object", "properties": {}, "required": []},
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
 ]
 
+# MCP Protocol version
+MCP_PROTOCOL_VERSION = "2025-03-26"
 
-@manager.route("/mcp/v1/tools/list", methods=["POST"])  # noqa: F821
-async def mcp_tools_list():
-    """Return the list of available MCP tools."""
+MCP_SERVER_INFO = {
+    "name": "ragflow-mcp-server",
+    "version": "1.0.0",
+}
+
+
+@manager.route("/mcp", methods=["POST"])  # noqa: F821
+async def mcp_endpoint():
+    """Standard MCP Streamable HTTP endpoint.
+    
+    Implements the MCP (Model Context Protocol) specification for tool discovery
+    and execution. Supports initialize, tools/list, and tools/call methods.
+    
+    See: https://spec.modelcontextprotocol.io/
+    """
     body = await request.get_json(silent=True) or {}
-    error, auth_result = await _authenticate_mcp_request(body)
-    if error:
-        return error
 
-    return {
-        "jsonrpc": "2.0",
-        "result": {"tools": TOOLS},
-        "id": body.get("id"),
-    }
+    if not isinstance(body, dict) or not body.get("jsonrpc") == "2.0":
+        return _mcp_invalid_request_error(body.get("id")), 400
+
+    rpc_id = body.get("id")
+    method = body.get("method", "")
+    params = body.get("params") or {}
+
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "result": {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {"tools": {}},
+                "serverInfo": MCP_SERVER_INFO,
+            },
+            "id": rpc_id,
+        }
+
+    if method == "notifications/initialized":
+        return {"jsonrpc": "2.0", "result": {}, "id": rpc_id}
+
+    if method == "tools/list":
+        error, auth_result = await _authenticate_mcp_request(body)
+        if error:
+            return error
+        return {
+            "jsonrpc": "2.0",
+            "result": {"tools": MCP_TOOLS},
+            "id": rpc_id,
+        }
+
+    if method == "tools/call":
+        error, auth_result = await _authenticate_mcp_request(body)
+        if error:
+            return error
+
+        tenant_id = auth_result["tenant_id"]
+        tool_name = params.get("name")
+        arguments = params.get("arguments") or {}
+        if not isinstance(arguments, dict):
+            return _mcp_invalid_params_error(rpc_id, "Invalid arguments structure")
+
+        if tool_name == "search_knowledge_base":
+            return await _handle_search_knowledge_base(tenant_id, arguments, rpc_id)
+        elif tool_name == "list_knowledge_bases":
+            return await _handle_list_knowledge_bases(tenant_id, rpc_id)
+        else:
+            return _mcp_method_not_found_error(rpc_id, tool_name)
+
+    return _mcp_method_not_found_error(rpc_id, method)
 
 
 async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
@@ -157,7 +222,7 @@ async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
         return _mcp_invalid_params_error(rpc_id, "Missing required parameter: query")
 
     dataset_ids = arguments.get("dataset_ids", []) or []
-    if dataset_ids is not None and not isinstance(dataset_ids, list):
+    if not isinstance(dataset_ids, list):
         return _mcp_invalid_params_error(rpc_id, "Invalid parameter: dataset_ids must be a list")
 
     top_n = arguments.get("top_n", DEFAULT_TOP_N)
@@ -165,11 +230,9 @@ async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
         top_n = DEFAULT_TOP_N
     top_n = min(top_n, MAX_TOP_N)
 
-    # If no dataset_ids provided, use all tenant KBs
     if not dataset_ids:
         dataset_ids = KnowledgebaseService.get_kb_ids(tenant_id)
     else:
-        # Validate that all provided dataset_ids belong to the tenant
         tenant_kb_ids = set(KnowledgebaseService.get_kb_ids(tenant_id))
         requested_ids = set(dataset_ids)
         invalid_ids = requested_ids - tenant_kb_ids
@@ -177,21 +240,11 @@ async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
             return _mcp_invalid_params_error(rpc_id, f"Invalid dataset_ids: {list(invalid_ids)}")
 
     if not dataset_ids:
-        result_text = json.dumps({"chunks": [], "total": 0}, ensure_ascii=False)
-        return {
-            "jsonrpc": "2.0",
-            "result": {"content": [{"type": "text", "text": result_text}]},
-            "id": rpc_id,
-        }
+        return _mcp_empty_results(rpc_id)
 
     kbs = KnowledgebaseService.get_by_ids(dataset_ids)
     if not kbs:
-        result_text = json.dumps({"chunks": [], "total": 0}, ensure_ascii=False)
-        return {
-            "jsonrpc": "2.0",
-            "result": {"content": [{"type": "text", "text": result_text}]},
-            "id": rpc_id,
-        }
+        return _mcp_empty_results(rpc_id)
 
     try:
         embd_nms = list(set([kb.embd_id for kb in kbs]))
@@ -226,14 +279,18 @@ async def _handle_search_knowledge_base(tenant_id, arguments, rpc_id):
                 }
             )
 
-        result = {
-            "chunks": chunks,
-            "total": len(chunks),
-        }
-        result_text = json.dumps(result, ensure_ascii=False)
         return {
             "jsonrpc": "2.0",
-            "result": {"content": [{"type": "text", "text": result_text}]},
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {"chunks": chunks, "total": len(chunks)}, ensure_ascii=False
+                        ),
+                    }
+                ]
+            },
             "id": rpc_id,
         }
     except Exception:
@@ -245,22 +302,27 @@ async def _handle_list_knowledge_bases(tenant_id, rpc_id):
     try:
         kb_ids = KnowledgebaseService.get_kb_ids(tenant_id)
         kbs = KnowledgebaseService.get_by_ids(kb_ids) if kb_ids else []
-
-        kb_list = []
-        for kb in kbs:
-            kb_list.append(
-                {
-                    "id": kb.id,
-                    "name": kb.name,
-                    "document_count": kb.doc_num,
-                    "chunk_count": kb.chunk_num,
-                }
-            )
-
-        result_text = json.dumps({"knowledge_bases": kb_list}, ensure_ascii=False)
+        kb_list = [
+            {
+                "id": kb.id,
+                "name": kb.name,
+                "document_count": kb.doc_num,
+                "chunk_count": kb.chunk_num,
+            }
+            for kb in kbs
+        ]
         return {
             "jsonrpc": "2.0",
-            "result": {"content": [{"type": "text", "text": result_text}]},
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {"knowledge_bases": kb_list}, ensure_ascii=False
+                        ),
+                    }
+                ]
+            },
             "id": rpc_id,
         }
     except Exception:
@@ -268,28 +330,16 @@ async def _handle_list_knowledge_bases(tenant_id, rpc_id):
         return _mcp_internal_error(rpc_id, "Internal error")
 
 
-@manager.route("/mcp/v1/tools/call", methods=["POST"])  # noqa: F821
-async def mcp_tools_call():
-    """Handle MCP tool calls."""
-    body = await request.get_json(silent=True) or {}
-    rpc_id = body.get("id") if isinstance(body, dict) else None
-
-    error, auth_result = await _authenticate_mcp_request(body)
-    if error:
-        return error
-
-    tenant_id = auth_result["tenant_id"]
-    params = body.get("params", {})
-    if not isinstance(params, dict):
-        return _mcp_invalid_params_error(rpc_id, "Invalid params structure")
-    tool_name = params.get("name")
-    arguments = params.get("arguments", {})
-    if not isinstance(arguments, dict):
-        return _mcp_invalid_params_error(rpc_id, "Invalid arguments structure")
-
-    if tool_name == "search_knowledge_base":
-        return await _handle_search_knowledge_base(tenant_id, arguments, rpc_id)
-    elif tool_name == "list_knowledge_bases":
-        return await _handle_list_knowledge_bases(tenant_id, rpc_id)
-    else:
-        return _mcp_method_not_found_error(rpc_id, tool_name)
+def _mcp_empty_results(rpc_id):
+    return {
+        "jsonrpc": "2.0",
+        "result": {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({"chunks": [], "total": 0}, ensure_ascii=False),
+                }
+            ]
+        },
+        "id": rpc_id,
+    }

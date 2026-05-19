@@ -904,7 +904,7 @@ Quanto sopra è il contenuto che devi riassumere.`,
       preview: 'Anteprima',
       fileError: 'Errore file',
       uploadLimit:
-        'Ogni file non deve superare 10MB, e il numero totale di file non deve superare 128.',
+        'Ogni file non deve superare 30MB, e il numero totale di file non deve superare 128.',
       destinationFolder: 'Cartella di destinazione',
       pleaseUploadAtLeastOneFile: 'Carica almeno un file',
     },

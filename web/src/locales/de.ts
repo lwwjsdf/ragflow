@@ -1442,7 +1442,7 @@ Beispiel: Virtual Hosted Style`,
       preview: 'Vorschau',
       fileError: 'Dateifehler',
       uploadLimit:
-        'Jede Datei darf 10MB nicht überschreiten, und die Gesamtzahl der Dateien darf 128 nicht überschreiten.',
+        'Jede Datei darf 30MB nicht überschreiten, und die Gesamtzahl der Dateien darf 128 nicht überschreiten.',
       destinationFolder: 'Zielordner',
       pleaseUploadAtLeastOneFile: 'Bitte laden Sie mindestens eine Datei hoch',
     },
